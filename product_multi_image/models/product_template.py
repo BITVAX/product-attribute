@@ -22,12 +22,18 @@ class ProductTemplate(models.Model):
     )
     def _compute_image_1920(self):
         for product in self:
-            images = product.image_ids.filtered(
-                lambda x: not x.product_variant_ids
-                or product.product_variant_count == 1
-            )
-            if images:
-                product.image_1920 = images[0].with_context(bin_size=False).image_1920
+            if not product.image_ids:
+                product.image_1920 = False
+                continue
+            else:
+                images = product.image_ids.filtered(
+                    lambda x: not x.product_variant_ids
+                    or product.product_variant_count == 1
+                )
+                if images:
+                    product.image_1920 = images[0].with_context(bin_size=False).image_1920
+                else:
+                    product.image_1920 = product.image_ids[0].with_context(bin_size=False).image_1920
 
     def _inverse_image_1920(self):
         for product in self:
