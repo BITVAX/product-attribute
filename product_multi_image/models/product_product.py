@@ -28,10 +28,24 @@ class ProductProduct(models.Model):
                 )
             )
             product.image_ids = [(6, 0, images.ids)]
-            if product.image_ids:
-                product.image_1920 = (
-                    product.with_context(bin_size=False).image_ids[0].image_1920
+
+    @api.depends(
+        "product_tmpl_id",
+        "product_tmpl_id.image_ids",
+        "product_tmpl_id.image_ids.product_variant_ids",
+        "product_tmpl_id.image_ids.image_1920",
+    )
+    def _compute_image_1920(self):
+        for product in self:
+            images = product.product_tmpl_id.image_ids.filtered(
+                lambda x: (
+                    not x.product_variant_ids or product.id in x.product_variant_ids.ids
                 )
+            )
+            if images:
+                product.image_1920 = images[0].with_context(bin_size=False).image_1920
+            else:
+                product.image_1920 = False
 
     def _inverse_image_ids(self):
         for product in self:
@@ -50,8 +64,11 @@ class ProductProduct(models.Model):
                     image.create(image._convert_to_write(image._cache))
                 else:
                     previous_images -= image
-                    # Update existing records
-                    image.write(image._convert_to_write(image._cache))
+                    # Update existing records only if there are actual changes
+                    # to avoid unnecessary write_date updates on parent product
+                    vals = image._convert_to_write(image._cache)
+                    if vals:
+                        image.write(vals)
             for image in previous_images:
                 # Images removed
                 if not image.product_variant_ids:
@@ -65,9 +82,6 @@ class ProductProduct(models.Model):
                 else:
                     # Leave the images for the rest of the variants
                     image.product_variant_ids = [(6, 0, variants.ids)]
-            product.image_1920 = (
-                False if len(product.image_ids) < 1 else product.image_ids[0].image_1920
-            )
 
     def unlink(self):
         obj = self.with_context(bypass_image_removal=True)
