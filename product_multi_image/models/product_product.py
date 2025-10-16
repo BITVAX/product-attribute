@@ -37,15 +37,30 @@ class ProductProduct(models.Model):
     )
     def _compute_image_1920(self):
         for product in self:
+            # Priority: variant-specific images first, then generic template images
             images = product.product_tmpl_id.image_ids.filtered(
-                lambda x: (
-                    not x.product_variant_ids or product.id in x.product_variant_ids.ids
-                )
+                lambda x: product.id in x.product_variant_ids.ids
             )
+            
+            # If no variant-specific images, use generic template images
+            if not images:
+                images = product.product_tmpl_id.image_ids.filtered(
+                    lambda x: not x.product_variant_ids
+                )
+
             if images:
-                product.image_1920 = images[0].with_context(bin_size=False).image_1920
+                gallery_image = images[0].with_context(bin_size=False).image_1920
+                product.image_1920 = gallery_image
+
+                # Update the stored field that POS uses
+                if product.image_variant_1920 != gallery_image:
+                    product.image_variant_1920 = gallery_image
             else:
+                # No gallery images - Odoo Core will fallback to template.image_1920
                 product.image_1920 = False
+                # Clear stored field when no gallery images
+                if product.image_variant_1920:
+                    product.image_variant_1920 = False
 
     def _inverse_image_ids(self):
         for product in self:
